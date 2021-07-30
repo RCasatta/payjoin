@@ -68,7 +68,9 @@ impl<'a> TryFrom<&'a str> for Uri<'a> {
 
 
         let prefix = "bitcoin:";
-        // from bip21: The scheme component ("bitcoin:") is case-insensitive, and implementations must accept any combination of uppercase and lowercase letters. The rest of the URI is case-sensitive, including the query parameter keys.
+        // from bip21: The scheme component ("bitcoin:") is case-insensitive, and implementations
+        // must accept any combination of uppercase and lowercase letters. The rest of the URI is
+        // case-sensitive, including the query parameter keys.
         if !s
             .chars()
             .zip(prefix.chars())
@@ -203,9 +205,9 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        let _ = Uri::from_str("");
-        let _ = Uri::from_str("bitcoin:");
-        let _ = Uri::from_str("bitcoin");
+        assert!(Uri::from_str("").is_err());
+        assert!(Uri::from_str("bitcoin").is_err());
+        assert!(Uri::from_str("bitcoin:").is_err());
     }
 
     #[test]
@@ -218,10 +220,7 @@ mod tests {
         assert!("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?amount=0.0001&pj=https://testnet.demo.btcpayserver.org/BTC/pj".parse::<Uri>().is_ok());
 
         //TODO we may want endpoint to be a valid URL
-        assert_eq!(
-            Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?amount=1&pj=http://a"),
-            Err::<Uri<'_>, ParseUriError>(ParseUriError::PjNotPresent)
-        );
+        assert!(Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?amount=1&pj=http://a").is_ok());
 
     }
 
@@ -260,8 +259,13 @@ mod tests {
         );
 
         assert_eq!(
-            Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?pj=https://testnet.demo.btcpayserver.org/BTC/pj&amount=21000000"),
-            Err::<Uri<'_>, ParseUriError>(InternalBip21Error::Amount(ParseAmountError::InvalidFormat).into())
+            Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?pj=https://testnet.demo.btcpayserver.org/BTC/pj&amount=1BTC"),
+            Err::<Uri<'_>, ParseUriError>(InternalBip21Error::Amount(ParseAmountError::InvalidCharacter('B')).into())
+        );
+
+        assert_eq!(
+            Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?pj=https://testnet.demo.btcpayserver.org/BTC/pj&amount=999999999999999999999"),
+            Err::<Uri<'_>, ParseUriError>(InternalBip21Error::Amount(ParseAmountError::TooBig).into())
         );
     }
 }
