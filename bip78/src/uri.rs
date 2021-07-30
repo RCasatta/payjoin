@@ -204,6 +204,8 @@ mod tests {
     #[test]
     fn test_empty() {
         let _ = Uri::from_str("");
+        let _ = Uri::from_str("bitcoin:");
+        let _ = Uri::from_str("bitcoin");
     }
 
     #[test]
