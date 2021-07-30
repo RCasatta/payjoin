@@ -15,9 +15,18 @@ pub(crate) enum InternalValidationError {
     Decode(bitcoin::consensus::encode::Error),
     InvalidInputType(InputTypeError),
     InvalidProposedInput(crate::psbt::PrevTxOutError),
-    VersionsDontMatch { proposed: i32, original: i32, },
-    LockTimesDontMatch { proposed: u32, original: u32, },
-    SenderTxinSequenceChanged { proposed: u32, original: u32, },
+    VersionsDontMatch {
+        proposed: i32,
+        original: i32,
+    },
+    LockTimesDontMatch {
+        proposed: u32,
+        original: u32,
+    },
+    SenderTxinSequenceChanged {
+        proposed: u32,
+        original: u32,
+    },
     SenderTxinContainsNonWitnessUtxo,
     SenderTxinContainsWitnessUtxo,
     SenderTxinContainsFinalScriptSig,
@@ -27,7 +36,10 @@ pub(crate) enum InternalValidationError {
     ReceiverTxinNotFinalized,
     ReceiverTxinMissingUtxoInfo,
     MixedSequence,
-    MixedInputTypes { proposed: InputType, original: InputType, },
+    MixedInputTypes {
+        proposed: InputType,
+        original: InputType,
+    },
     MissingOrShuffledInputs,
     TxOutContainsKeyPaths,
     FeeContributionExceedsMaximum,
@@ -42,9 +54,7 @@ pub(crate) enum InternalValidationError {
 
 impl From<InternalValidationError> for ValidationError {
     fn from(value: InternalValidationError) -> Self {
-        ValidationError {
-            internal: value,
-        }
+        ValidationError { internal: value }
     }
 }
 impl From<InputTypeError> for InternalValidationError {
@@ -96,9 +106,18 @@ impl std::error::Error for ValidationError {
             Decode(error) => Some(error),
             InvalidInputType(error) => Some(error),
             InvalidProposedInput(error) => Some(error),
-            VersionsDontMatch { proposed: _, original: _, } => None,
-            LockTimesDontMatch { proposed: _, original: _, } => None,
-            SenderTxinSequenceChanged { proposed: _, original: _, } => None,
+            VersionsDontMatch {
+                proposed: _,
+                original: _,
+            } => None,
+            LockTimesDontMatch {
+                proposed: _,
+                original: _,
+            } => None,
+            SenderTxinSequenceChanged {
+                proposed: _,
+                original: _,
+            } => None,
             SenderTxinContainsNonWitnessUtxo => None,
             SenderTxinContainsWitnessUtxo => None,
             SenderTxinContainsFinalScriptSig => None,
@@ -188,5 +207,3 @@ impl From<InternalCreateRequestError> for CreateRequestError {
         CreateRequestError(value)
     }
 }
-
-

@@ -1,0 +1,25 @@
+
+[package]
+name = "payjoin-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.3"
+bip78 = { path = "../bip78" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "uri"
+path = "fuzz_targets/uri.rs"
+test = false
+doc = false
+

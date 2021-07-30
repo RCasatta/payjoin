@@ -1,8 +1,8 @@
 //! Utilities to make work with PSBTs easier
 
+use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{TxIn, TxOut};
-use bitcoin::util::psbt;
 use std::convert::TryInto;
 use std::fmt;
 
@@ -14,18 +14,29 @@ pub(crate) trait PsbtExt {
 }
 
 impl<'a> PsbtExt for &'a Psbt {
-    type Iterator = std::iter::Map<std::iter::Zip<std::slice::Iter<'a, TxIn>, std::slice::Iter<'a, psbt::Input>>, fn((&'a TxIn, &'a psbt::Input)) -> InputPair<'a>>;
+    type Iterator = std::iter::Map<
+        std::iter::Zip<std::slice::Iter<'a, TxIn>, std::slice::Iter<'a, psbt::Input>>,
+        fn((&'a TxIn, &'a psbt::Input)) -> InputPair<'a>,
+    >;
 
     fn input_pairs(self) -> Self::Iterator {
         assert_eq!(self.global.unsigned_tx.input.len(), self.inputs.len());
-        self.global.unsigned_tx.input.iter().zip(&self.inputs).map(|(txin, psbtin)| InputPair { txin, psbtin })
+        self.global
+            .unsigned_tx
+            .input
+            .iter()
+            .zip(&self.inputs)
+            .map(|(txin, psbtin)| InputPair { txin, psbtin })
     }
 
     fn validate_input_utxos(self, treat_missing_as_error: bool) -> Result<(), PsbtInputsError> {
-        self
-            .input_pairs()
+        self.input_pairs()
             .enumerate()
-            .map(|(index, input)| input.validate_utxo(treat_missing_as_error).map_err(|error| PsbtInputsError { index, error, }))
+            .map(|(index, input)| {
+                input
+                    .validate_utxo(treat_missing_as_error)
+                    .map_err(|error| PsbtInputsError { index, error })
+            })
             .collect()
     }
 }
@@ -41,51 +52,87 @@ impl<'a> InputPair<'a> {
         match (&self.psbtin.non_witness_utxo, &self.psbtin.witness_utxo) {
             (None, None) => Err(PrevTxOutError::MissingUtxoInformation),
             (_, Some(txout)) => Ok(txout),
-            (Some(tx), None) => {
-                tx.output
-                    .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, })?)
-                    .ok_or(PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, })
-            },
+            (Some(tx), None) => tx
+                .output
+                .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| {
+                    PrevTxOutError::IndexOutOfBounds {
+                        output_count: tx.output.len(),
+                        index: self.txin.previous_output.vout,
+                    }
+                })?)
+                .ok_or(PrevTxOutError::IndexOutOfBounds {
+                    output_count: tx.output.len(),
+                    index: self.txin.previous_output.vout,
+                }),
         }
     }
 
     pub fn validate_utxo(&self, treat_missing_as_error: bool) -> Result<(), PsbtInputError> {
         match (&self.psbtin.non_witness_utxo, &self.psbtin.witness_utxo) {
-            (None, None) if treat_missing_as_error => Err(PsbtInputError::PrevTxOut(PrevTxOutError::MissingUtxoInformation)),
+            (None, None) if treat_missing_as_error => Err(PsbtInputError::PrevTxOut(
+                PrevTxOutError::MissingUtxoInformation,
+            )),
             (None, None) => Ok(()),
-            (Some(tx), None) if tx.txid() == self.txin.previous_output.txid => tx.output
-                .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, })?)
-                .ok_or(PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, }.into())
+            (Some(tx), None) if tx.txid() == self.txin.previous_output.txid => tx
+                .output
+                .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| {
+                    PrevTxOutError::IndexOutOfBounds {
+                        output_count: tx.output.len(),
+                        index: self.txin.previous_output.vout,
+                    }
+                })?)
+                .ok_or(
+                    PrevTxOutError::IndexOutOfBounds {
+                        output_count: tx.output.len(),
+                        index: self.txin.previous_output.vout,
+                    }
+                    .into(),
+                )
                 .map(drop),
             (Some(_), None) => Err(PsbtInputError::UnequalTxid),
             (None, Some(_)) => Ok(()),
             (Some(tx), Some(witness_txout)) if tx.txid() == self.txin.previous_output.txid => {
-                let non_witness_txout = tx.output
-                    .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, })?)
-                    .ok_or(PrevTxOutError::IndexOutOfBounds { output_count: tx.output.len(), index: self.txin.previous_output.vout, })?;
+                let non_witness_txout = tx
+                    .output
+                    .get::<usize>(self.txin.previous_output.vout.try_into().map_err(|_| {
+                        PrevTxOutError::IndexOutOfBounds {
+                            output_count: tx.output.len(),
+                            index: self.txin.previous_output.vout,
+                        }
+                    })?)
+                    .ok_or(PrevTxOutError::IndexOutOfBounds {
+                        output_count: tx.output.len(),
+                        index: self.txin.previous_output.vout,
+                    })?;
                 if witness_txout == non_witness_txout {
                     Ok(())
                 } else {
                     Err(PsbtInputError::SegWitTxOutMismatch)
                 }
-            },
+            }
             (Some(_), Some(_)) => Err(PsbtInputError::UnequalTxid),
         }
     }
-
 }
 
 #[derive(Debug)]
 pub(crate) enum PrevTxOutError {
     MissingUtxoInformation,
-    IndexOutOfBounds { output_count: usize, index: u32, },
+    IndexOutOfBounds { output_count: usize, index: u32 },
 }
 
 impl fmt::Display for PrevTxOutError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PrevTxOutError::MissingUtxoInformation => write!(f, "missing UTXO information"),
-            PrevTxOutError::IndexOutOfBounds { output_count, index, } => write!(f, "index {} out of bounds (number of outputs: {})", index, output_count),
+            PrevTxOutError::IndexOutOfBounds {
+                output_count,
+                index,
+            } => write!(
+                f,
+                "index {} out of bounds (number of outputs: {})",
+                index, output_count
+            ),
         }
     }
 }
