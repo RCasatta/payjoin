@@ -222,6 +222,9 @@ mod tests {
         //TODO we may want endpoint to be a valid URL
         assert!(Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?amount=1&pj=http://a").is_ok());
 
+        let uri = Uri::from_str("bitcoin:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4?amount=1&pj=http://example.com?ciao").unwrap();
+        assert_eq!(uri.endpoint, "http://example.com?ciao");
+
     }
 
     #[test]

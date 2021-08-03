@@ -1,6 +1,6 @@
 use crate::psbt::PsbtExt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Script, TxOut};
+use bitcoin::{Script, TxOut, Amount, Address};
 
 mod error;
 
@@ -13,6 +13,10 @@ pub trait Headers {
 
 pub struct UncheckedProposal {
     psbt: Psbt,
+}
+
+pub fn create_uri(address: &Address, amount: &Amount, pj: &str) -> String {
+    format!("{}?amount={}&pj={}", address.to_qr_uri(), amount.as_btc(), pj)
 }
 
 impl UncheckedProposal {
@@ -115,4 +119,20 @@ pub enum BumpFeePolicy {
 pub struct NewOutputOptions {
     set_as_fee_output: bool,
     subtract_fees_from_this: bool,
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::receiver::create_uri;
+    use bitcoin::{Address, Amount};
+    use std::str::FromStr;
+
+    #[test]
+    fn test_create_uri() {
+        let address = Address::from_str("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq").unwrap();
+        let amount = Amount::from_btc(1.0).unwrap();
+        let uri = create_uri(&address, &amount, "https://example.com");
+        assert_eq!(uri, "BITCOIN:BC1QAR0SRRR7XFKVY5L643LYDNW9RE59GTZZWF5MDQ?amount=100000000&pj=https://example.com");
+    }
 }

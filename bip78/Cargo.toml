@@ -21,3 +21,8 @@ receiver = ["rand"]
 bitcoin = "0.26.2"
 base64 = "0.13.0"
 rand = { version = "0.8.4", optional = true }
+
+[dev-dependencies]
+bitcoind = { git = "https://github.com/RCasatta/bitcoind", features = ["0_21_1"], rev="147b21ce7487387345759cb05da87fdada0d3a7a" }
+log = "0.4.14"
+env_logger = "0.9.0"
