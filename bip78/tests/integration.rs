@@ -1,12 +1,14 @@
-use bitcoind::bitcoincore_rpc::RpcApi;
-use bitcoind::bitcoincore_rpc;
-use bitcoin::Amount;
+
+use bitcoind::bitcoincore_rpc::{Client, RpcApi, self};
+use bitcoin::{Amount, OutPoint, Address, Network};
 use bip78::Uri;
 use std::str::FromStr;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use log::{debug, log_enabled, Level};
-use std::collections::HashMap;
-use bip78::receiver::Headers;
+use std::collections::{HashMap, HashSet};
+use bip78::receiver::{Headers, Checks, ChecksError};
+use bip78::bitcoin::{Transaction, Script};
+use assert_matches::assert_matches;
 
 #[cfg(all(feature = "sender", feature = "receiver"))]
 #[test]
@@ -73,10 +75,49 @@ fn integration_test() {
     let headers = HeaderMock::from_vec(&req.body);
 
     // Receiver receive payjoin proposal, IRL it will be an HTTP request (over ssl or onion)
-    let proposal = bip78::receiver::UncheckedProposal::from_request(req.body.as_slice(), "",headers).unwrap();
+    let unchecked_proposal = bip78::receiver::UncheckedProposal::from_request(req.body.as_slice(), "",headers).unwrap();
+    let mut bitcoind_checker = BitcoindChecker::new(&receiver);
 
-    // TODO
+    let proposal = unchecked_proposal.check(&mut bitcoind_checker).unwrap();
 
+    // TODO add receiver input and change outputs
+
+}
+
+struct BitcoindChecker<'a> {
+    client: &'a Client,
+    /// This is a mockup implementation, OutPoint seen should be persisted across session or attacks are possible
+    seen: HashSet<OutPoint>,
+    network: Network,
+}
+
+impl<'a> BitcoindChecker<'a> {
+    pub fn new(client: &'a Client) -> Self {
+
+        BitcoindChecker {
+            client,
+            seen: HashSet::new(),
+            network: Network::Regtest, //TODO
+        }
+    }
+}
+
+impl<'a> Checks for BitcoindChecker<'a> {
+    fn unbroacastable(&self, tx: &Transaction) -> bool {
+        let results = self.client.test_mempool_accept(&vec![tx]).unwrap(); //TODO
+        !results.iter().any(|e| e.txid == tx.txid() && e.allowed)
+    }
+
+    fn already_seen(&mut self, out_point: &OutPoint) -> bool {
+        !self.seen.insert(out_point.clone())
+    }
+
+    fn owned(&self, script_pubkey: &Script) -> bool {
+        let address = Address::from_script(script_pubkey, self.network).unwrap();  //TODO
+        debug!("address: {}", address);
+        let info = self.client.get_address_info(&address).unwrap();  //TODO
+        info.is_mine.unwrap()
+    }
 }
 
 struct HeaderMock(HashMap<String, String>);

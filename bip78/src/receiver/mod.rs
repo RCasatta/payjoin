@@ -1,17 +1,38 @@
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Script, TxOut, Address, Amount};
+
+use bitcoin::{Script, TxOut, Address, Amount, Transaction, OutPoint};
 
 mod error;
 
 pub use error::RequestError;
 use error::InternalRequestError;
+use crate::psbt::{InputPair, Psbt};
+use bitcoin::util::psbt::PartiallySignedTransaction;
+use std::convert::TryFrom;
 
 pub trait Headers {
     fn get_header(&self, key: &str) -> Option<&str>;
 }
 
+
+#[derive(Debug)]
 pub struct UncheckedProposal {
     psbt: Psbt,
+}
+
+/// All checks should return false to pass
+// TODO return [Result]s
+pub trait Checks {
+    fn unbroacastable(&self, tx: &Transaction) -> bool;
+    fn already_seen(&mut self, out_point: &OutPoint) -> bool;
+    fn owned(&self, script_pubkey: &Script) -> bool;
+}
+
+#[derive(Debug)]
+pub enum ChecksError {
+    TxUnbroadcastable,
+    TxinAlreadySeen,
+    TxinOwned,
+    MissingPrevout,
 }
 
 impl UncheckedProposal {
@@ -35,50 +56,41 @@ impl UncheckedProposal {
         // enforce the limit
         let mut limited = body.take(content_length);
         let reader = base64::read::DecoderReader::new(&mut limited, base64::STANDARD);
-        let psbt = Psbt::consensus_decode(reader).map_err(InternalRequestError::Decode)?;
+        let psbt = PartiallySignedTransaction::consensus_decode(reader).map_err(InternalRequestError::Decode)?;
 
         Ok(UncheckedProposal {
-            psbt,
+            psbt: Psbt::try_from(psbt).expect("deserialization ensure input/output counts"),
         })
     }
 
-    pub fn get_transaction_to_check_broadcast(&self) -> bitcoin::Transaction {
-        self.psbt.clone().extract_tx()
-    }
-
-    pub fn assume_broadcastability_was_verified(self) -> UnlockedProposal {
-        UnlockedProposal {
-            psbt: self.psbt,
+    pub fn check<C: Checks>(self, checks: &mut C) -> Result<Proposal, ChecksError> {
+        let tx = self.psbt.clone().extract_tx();
+        if checks.unbroacastable(&tx) {
+            return Err(ChecksError::TxUnbroadcastable);
         }
-    }
 
-    pub fn this_is_purely_interactive_wallet(self) -> UnlockedProposal {
-        UnlockedProposal {
-            psbt: self.psbt,
+        for input_pair in self.psbt.input_pairs() {
+            if checks.owned(&input_pair.previous_txout().map_err(|_| ChecksError::MissingPrevout)?.script_pubkey) {
+                return Err(ChecksError::TxinOwned);
+            }
+
+            if checks.already_seen(&input_pair.txin.previous_output) {
+                return Err(ChecksError::TxinAlreadySeen);
+            }
         }
+
+        Ok(Proposal {
+            psbt: self.psbt,
+        })
     }
 }
 
-pub struct UnlockedProposal {
-    psbt: Psbt,
-}
-
-impl UnlockedProposal {
-    pub fn utxos_to_be_locked(&self) -> impl '_ + Iterator<Item=&bitcoin::OutPoint> {
-        self.psbt.global.unsigned_tx.input.iter().map(|input| &input.previous_output)
-    }
-
-    pub fn assume_locked(self) -> Proposal {
-        Proposal {
-            psbt: self.psbt,
-        }
-    }
-}
 
 /// Transaction that must be broadcasted.
 #[must_use = "The transaction must be broadcasted to prevent abuse"]
 pub struct MustBroadcast(pub bitcoin::Transaction);
 
+#[derive(Debug)]
 pub struct Proposal {
     psbt: Psbt,
 }
