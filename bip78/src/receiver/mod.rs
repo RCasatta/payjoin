@@ -1,5 +1,5 @@
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Script, TxOut};
+use bitcoin::{Script, TxOut, Address, Amount};
 
 mod error;
 
@@ -113,3 +113,6 @@ pub struct NewOutputOptions {
     subtract_fees_from_this: bool,
 }
 
+pub fn create_uri(address: &Address, amount: &Amount, pj: &str) -> String {
+    format!("{}?amount={}&pj={}", address.to_qr_uri(), amount.as_btc(), pj)
+}
