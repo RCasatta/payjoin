@@ -5,6 +5,7 @@ use std::ops::{Mul, Div};
 pub(crate) struct FeeRate(u64);
 
 impl FeeRate {
+    #[allow(unused)]
     pub(crate) fn from_sat_per_vb(rate: u64) -> Self {
         FeeRate(rate * 4)
     }
@@ -13,10 +14,12 @@ impl FeeRate {
         FeeRate(rate)
     }
 
+    #[allow(unused)]
     pub(crate) fn to_sat_per_vb(self) -> u64 {
         self.0 * 4
     }
 
+    #[allow(unused)]
     pub(crate) fn to_sat_per_wu(self) -> u64 {
         self.0
     }

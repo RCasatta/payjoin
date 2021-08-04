@@ -24,6 +24,7 @@ pub(crate) enum InternalValidationError {
     SenderTxinContainsFinalScriptWitness,
     TxInContainsKeyPaths,
     ContainsPartialSigs,
+    #[allow(unused)]
     ReceiverTxinNotFinalized,
     ReceiverTxinMissingUtxoInfo,
     MixedSequence,

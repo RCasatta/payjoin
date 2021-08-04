@@ -301,11 +301,13 @@ impl Context {
 struct OutputStats {
     total_value: bitcoin::Amount,
     contributed_fee: bitcoin::Amount,
+    #[allow(unused)]
     total_weight: Weight,
 }
 
 struct InputStats {
     total_value: bitcoin::Amount,
+    #[allow(unused)]
     total_weight: Weight,
 }
 

@@ -5,6 +5,7 @@ use bitcoin::blockdata::transaction::TxOut;
 use bitcoin::util::psbt::Input as PsbtInput;
 
 /// Takes the script out of script_sig assuming script_sig signs p2sh script
+#[allow(unused)]
 fn unpack_p2sh(script_sig: &Script) -> Option<Script> {
     match script_sig.instructions().last()?.ok()? {
         Instruction::PushBytes(bytes) => Some(Script::from(bytes.to_vec())),

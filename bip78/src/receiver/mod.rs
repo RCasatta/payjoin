@@ -1,6 +1,4 @@
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Script, TxOut};
-use crate::psbt::PsbtExt;
 
 mod error;
 
@@ -16,7 +14,7 @@ pub struct UncheckedProposal {
 }
 
 impl UncheckedProposal {
-    pub fn from_request(body: impl std::io::Read, query: &str, headers: impl Headers) -> Result<Self, RequestError> {
+    pub fn from_request(body: impl std::io::Read, _query: &str, headers: impl Headers) -> Result<Self, RequestError> {
         use crate::bitcoin::consensus::Decodable;
 
         let content_type = headers.get_header("content-type").ok_or(InternalRequestError::MissingHeader("Content-Type"))?;
@@ -80,6 +78,7 @@ impl UnlockedProposal {
 #[must_use = "The transaction must be broadcasted to prevent abuse"]
 pub struct MustBroadcast(pub bitcoin::Transaction);
 
+#[allow(unused)]
 pub struct Proposal {
     psbt: Psbt,
 }
@@ -100,6 +99,7 @@ impl Proposal {
 }
 */
 
+#[allow(unused)]
 pub struct ReceiverOptions {
     dust_limit: bitcoin::Amount,
 }
@@ -109,6 +109,7 @@ pub enum BumpFeePolicy {
     SubtractOurFeeOutput,
 }
 
+#[allow(unused)]
 pub struct NewOutputOptions {
     set_as_fee_output: bool,
     subtract_fees_from_this: bool,
