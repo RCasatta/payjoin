@@ -1,3 +1,4 @@
+use std::fmt;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 #[cfg(feature = "sender")]
@@ -91,6 +92,19 @@ impl std::str::FromStr for Uri<'static> {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Uri::try_from(s).map(Uri::into_static)
+    }
+}
+
+impl fmt::Display for Uri<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}?", self.address.to_qr_uri());
+        if let Some(amount) = self.amount {
+            write!(f, "amount={}&", amount.as_btc());
+        }
+        if self.disable_output_substitution {
+            write!(f, "&disableoutputsubstitution=1&");
+        }
+        write!(f, "pj={}", self.endpoint)
     }
 }
 
@@ -192,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_uris() {
+    fn test_valid_uris_and_rt() {
         let https = "https://example.com";
         let onion = "http://vjdpwgybvubne5hda6v4c5iaeeevhge6jvo3w2cl6eocbwwvwxp7b7qd.onion";
 
@@ -202,10 +216,12 @@ mod tests {
 
         for address in [base58, bech32_upper, bech32_lower].iter() {
             for pj in [https, onion].iter() {
-                // TODO add with and without amount
-                // TODO shuffle params
-                let uri = format!("{}?amount=1&pj={}", address, pj);
-                assert!(Uri::from_str(&uri).is_ok());
+                for amount in ["", "amount=1"].iter() {
+                    let mut uri = format!("{}?{}&pj={}", address, amount, pj);
+                    let result = Uri::from_str(&uri);
+                    assert!(result.is_ok());
+                    assert_eq!(uri.make_ascii_lowercase(), format!("{}", result.unwrap()).make_ascii_lowercase());
+                }
             }
         }
     }
