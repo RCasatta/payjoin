@@ -19,6 +19,16 @@ pub struct UncheckedProposal {
     psbt: Psbt,
 }
 
+#[cfg(not(feature = "async"))]
+/// All checks should return false to pass
+// TODO return [Result]s
+pub trait Checks {
+    fn unbroacastable(&self, tx: &Transaction) -> bool;
+    fn already_seen(&mut self, out_point: &OutPoint) -> bool;
+    fn owned(&self, script_pubkey: &Script) -> bool;
+}
+
+#[cfg(feature = "async")]
 /// All checks should return false to pass
 // TODO return [Result]s
 pub trait Checks {
@@ -63,6 +73,29 @@ impl UncheckedProposal {
         })
     }
 
+    #[cfg(feature = "async")]
+    pub async fn check<C: Checks>(self, checks: &mut C) -> Result<Proposal, ChecksError> {
+        let tx = self.psbt.clone().extract_tx();
+        if checks.unbroacastable(&tx) {
+            return Err(ChecksError::TxUnbroadcastable);
+        }
+
+        for input_pair in self.psbt.input_pairs() {
+            if checks.owned(&input_pair.previous_txout().map_err(|_| ChecksError::MissingPrevout)?.script_pubkey) {
+                return Err(ChecksError::TxinOwned);
+            }
+
+            if checks.already_seen(&input_pair.txin.previous_output) {
+                return Err(ChecksError::TxinAlreadySeen);
+            }
+        }
+
+        Ok(Proposal {
+            psbt: self.psbt,
+        })
+    }
+
+    #[cfg(not(feature = "async"))]
     pub fn check<C: Checks>(self, checks: &mut C) -> Result<Proposal, ChecksError> {
         let tx = self.psbt.clone().extract_tx();
         if checks.unbroacastable(&tx) {

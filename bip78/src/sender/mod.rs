@@ -472,6 +472,7 @@ mod tests {
         };
         let mut proposal = super::load_psbt_from_base64(&mut proposal).unwrap();
         eprintln!("proposal: {:#?}", proposal);
+
         for output in proposal.outputs_mut() {
             output.bip32_derivation.clear();
         }
