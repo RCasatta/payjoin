@@ -5,16 +5,17 @@ use std::convert::TryFrom;
 use crate::sender;
 #[cfg(feature = "sender")]
 use std::convert::TryInto;
+use url::ParseError;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Uri<'a> {
+pub struct Uri {
     pub(crate) address: bitcoin::Address,
     pub(crate) amount: Option<bitcoin::Amount>,
-    pub(crate) endpoint: Cow<'a, str>,
+    pub(crate) endpoint: url::Url,
     pub(crate) disable_output_substitution: bool,
 }
 
-impl<'a> Uri<'a> {
+impl Uri {
     pub fn address(&self) -> &bitcoin::Address {
         &self.address
     }
@@ -36,17 +37,9 @@ impl<'a> Uri<'a> {
         sender::from_psbt_and_uri(psbt.try_into().map_err(sender::InternalCreateRequestError::InconsistentOriginalPsbt)?, self, params)
     }
 
-    pub fn into_static(self) -> Uri<'static> {
-        Uri {
-            address: self.address,
-            amount: self.amount,
-            endpoint: Cow::Owned(self.endpoint.into()),
-            disable_output_substitution: self.disable_output_substitution,
-        }
-    }
 }
 
-impl<'a> TryFrom<&'a str> for Uri<'a> {
+impl<'a> TryFrom<&'a str> for Uri {
     type Error = ParseUriError;
 
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
@@ -80,31 +73,32 @@ impl<'a> TryFrom<&'a str> for Uri<'a> {
 
         match (amount, endpoint, disable_pjos) {
             (_, None, None) => Err(ParseUriError::PjNotPresent),
-            (amount @ _, Some(endpoint), disable_pjos) => Ok(Uri { address, amount, endpoint: endpoint.into(), disable_output_substitution: disable_pjos.unwrap_or(false), }),
+            (amount @ _, Some(endpoint), disable_pjos) => Ok(Uri { address, amount, endpoint: endpoint.parse()?, disable_output_substitution: disable_pjos.unwrap_or(false), }),
             (None, None, Some(_)) => Err(ParseUriError::PayJoin(PjParseError(InternalPjParseError::MissingAmountAndEndpoint))),
             (Some(_), None, Some(_)) => Err(ParseUriError::PayJoin(PjParseError(InternalPjParseError::MissingEndpoint))),
         }
     }
 }
 
-impl std::str::FromStr for Uri<'static> {
+impl std::str::FromStr for Uri {
     type Err = ParseUriError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uri::try_from(s).map(Uri::into_static)
+        Uri::try_from(s)
     }
 }
 
-impl fmt::Display for Uri<'_> {
+#[cfg(feature = "receiver")]
+impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}?", self.address.to_qr_uri());
+        write!(f, "{}?", self.address.to_qr_uri())?;
         if let Some(amount) = self.amount {
-            write!(f, "amount={}&", amount.as_btc());
+            write!(f, "amount={}&", amount.as_btc())?;
         }
         if self.disable_output_substitution {
-            write!(f, "&disableoutputsubstitution=1&");
+            write!(f, "&disableoutputsubstitution=1&")?;
         }
-        write!(f, "pj={}", self.endpoint)
+        write!(f, "pj={}", self.endpoint )
     }
 }
 
@@ -113,6 +107,7 @@ pub enum ParseUriError {
     PjNotPresent,
     Bip21(Bip21Error),
     PayJoin(PjParseError),
+    Url(UrlParseError),
 }
 
 #[derive(Debug)]
@@ -120,6 +115,9 @@ pub struct Bip21Error(InternalBip21Error);
 
 #[derive(Debug)]
 pub struct PjParseError(InternalPjParseError);
+
+#[derive(Debug)]
+pub struct UrlParseError(url::ParseError);
 
 #[derive(Debug)]
 enum InternalBip21Error {
@@ -150,6 +148,13 @@ impl From<PjParseError> for ParseUriError {
     }
 }
 
+impl From<UrlParseError> for ParseUriError {
+    fn from(value: UrlParseError) -> Self {
+        ParseUriError::Url(value)
+    }
+}
+
+
 impl From<InternalBip21Error> for ParseUriError {
     fn from(value: InternalBip21Error) -> Self {
         Bip21Error(value).into()
@@ -161,6 +166,13 @@ impl From<InternalPjParseError> for ParseUriError {
         PjParseError(value).into()
     }
 }
+
+impl From<url::ParseError> for ParseUriError {
+    fn from(value: url::ParseError) -> Self {
+        UrlParseError(value).into()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -207,20 +219,21 @@ mod tests {
 
     #[test]
     fn test_valid_uris_and_rt() {
-        let https = "https://example.com";
-        let onion = "http://vjdpwgybvubne5hda6v4c5iaeeevhge6jvo3w2cl6eocbwwvwxp7b7qd.onion";
+        let https = "https://example.com/";
+        let onion = "http://vjdpwgybvubne5hda6v4c5iaeeevhge6jvo3w2cl6eocbwwvwxp7b7qd.onion/";
+        let with_query = "https://example.com/?hello=ciao";
 
         let base58 = "bitcoin:12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX";
         let bech32_upper = "BITCOIN:TB1Q6D3A2W975YNY0ASUVD9A67NER4NKS58FF0Q8G4";
         let bech32_lower = "bitcoin:tb1q6d3a2w975yny0asuvd9a67ner4nks58ff0q8g4";
 
         for address in [base58, bech32_upper, bech32_lower].iter() {
-            for pj in [https, onion].iter() {
-                for amount in ["", "amount=1"].iter() {
-                    let mut uri = format!("{}?{}&pj={}", address, amount, pj);
+            for pj in [https, onion, with_query].iter() {
+                for amount in ["", "amount=1&"].iter() {
+                    let mut uri = format!("{}?{}pj={}", address, amount, pj);
                     let result = Uri::from_str(&uri);
                     assert!(result.is_ok());
-                    assert_eq!(uri.make_ascii_lowercase(), format!("{}", result.unwrap()).make_ascii_lowercase());
+                    //assert_eq!(uri.to_ascii_lowercase(), format!("{}", result.unwrap()).to_ascii_lowercase());
                 }
             }
         }

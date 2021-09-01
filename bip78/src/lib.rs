@@ -29,5 +29,6 @@ mod uri;
 pub(crate) mod weight;
 pub(crate) mod fee_rate;
 pub(crate) mod psbt;
+mod state;
 
 pub use uri::{Uri, ParseUriError, Bip21Error, PjParseError};

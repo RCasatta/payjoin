@@ -44,6 +44,7 @@ dependencies = [
  "base64 0.13.0",
  "bitcoin",
  "rand",
+ "url 2.2.2",
 ]
 
 [[package]]

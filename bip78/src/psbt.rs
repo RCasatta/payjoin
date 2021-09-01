@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 #[derive(Debug)]
-pub(crate) enum InconsistentPsbt {
+pub enum InconsistentPsbt {
     UnequalInputCounts { tx_ins: usize, psbt_ins: usize, },
     UnequalOutputCounts { tx_outs: usize, psbt_outs: usize, },
 }
