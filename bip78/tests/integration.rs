@@ -1,5 +1,5 @@
 
-#[cfg(all(feature = "sender", feature = "receiver"))]
+#[cfg(all(feature = "sender", feature = "receiver", feature = "integration"))]
 mod integration {
     use bitcoind::bitcoincore_rpc::RpcApi;
     use bitcoind::bitcoincore_rpc;

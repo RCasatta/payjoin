@@ -18,11 +18,13 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           override: true
+      - run: echo "INTEGRATION=integration" >> $GITHUB_ENV
+        if: ${{ matrix.rust != '1.41.1' }}
       - name: test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --verbose --all-features --lib --manifest-path bip78/Cargo.toml
+          args: --verbose --features sender,receiver,${{ env.INTEGRATION }} --manifest-path bip78/Cargo.toml
 
   build-payjoin-client:
     runs-on: ubuntu-20.04
