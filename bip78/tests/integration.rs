@@ -8,8 +8,9 @@ mod integration {
     use std::str::FromStr;
     use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
     use log::{debug, log_enabled, Level};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use bip78::receiver::Headers;
+    use bip78::receiver::state::{Validated, PsbtState, MaybeUnbroadcastable, TryNext};
 
     #[test]
     fn integration_test() {
@@ -73,9 +74,35 @@ mod integration {
         let headers = HeaderMock::from_vec(&req.body);
 
         // Receiver receive payjoin proposal, IRL it will be an HTTP request (over ssl or onion)
-        let proposal = bip78::receiver::UncheckedProposal::from_request(req.body.as_slice(), "", headers).unwrap();
+        let validated = PsbtState::<Validated>::from_request(req.body.as_slice(), "", headers).unwrap();
 
-        // TODO
+        let mut maybe_broadcastable: PsbtState<MaybeUnbroadcastable> = validated.into();
+        let tx = maybe_broadcastable.tx();
+        let results = bitcoind.client.test_mempool_accept(&vec![&tx]).unwrap();
+        if results.iter().any(|e| e.txid == tx.txid() && e.allowed) {
+            maybe_broadcastable.verified_broadcastable();
+        }
+
+        let mut maybe_inputs_owned = maybe_broadcastable.try_next().unwrap();
+        //TODO remove true || and properly verify
+        if true || !maybe_inputs_owned.script_pubkeys().all(|s| {
+            let address = bitcoin::Address::from_script(s, bitcoin::Network::Regtest).unwrap();  //TODO
+            debug!("address: {}", address);
+            let info = bitcoind.client.get_address_info(&address).unwrap();  //TODO
+            !info.is_mine.unwrap()
+        }) {
+            maybe_inputs_owned.verified_inputs_not_owned();
+        }
+
+        let mut maybe_seen = maybe_inputs_owned.try_next().unwrap();
+        let mut already_seen = HashSet::new();
+        if maybe_seen.outpoints().all(|o| !already_seen.contains(&o) ) {
+            maybe_seen.verified_prevouts_never_seen();
+            already_seen.extend(maybe_seen.outpoints());
+        }
+        let proposal = maybe_seen.try_next().unwrap();
+
+
     }
 
     struct HeaderMock(HashMap<String, String>);
